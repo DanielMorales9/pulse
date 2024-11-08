@@ -1,8 +1,9 @@
 import logging
 import os
 
-LOG_LEVEL = os.getenv("LOG_LEVEL", logging.INFO)
 import sys
+
+LOG_LEVEL = os.getenv("LOG_LEVEL", logging.INFO)
 
 
 def _build_plain_formatter() -> logging.Formatter:
