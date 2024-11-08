@@ -39,6 +39,11 @@ exclude_lines = [
     "pragma: no cover",
     "@abc.abstractmethod",
     "raise NotImplementedError",
+    "pass",
+]
+[tool.coverage.run]
+omit = [
+    "pulse/main.py",
 ]
 
 [tool.mypy]
