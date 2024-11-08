@@ -1,8 +1,10 @@
 import dataclasses
 import subprocess
 from abc import ABC, abstractmethod
+from datetime import datetime
 
 import docker
+from croniter import croniter
 
 from pulse.constants import DEFAULT_DOCKER_IMAGE, Runtimes
 from pulse.logutils import LoggingMixing
@@ -12,6 +14,14 @@ from pulse.logutils import LoggingMixing
 class Job:
     command: str | list[str]
     runtime: Runtimes
+    schedule: str | None = None
+    next_run: datetime | None = None
+
+    def calculate_next_run(self, at: datetime) -> datetime:
+        if not self.schedule:
+            return at
+        cron = croniter(self.schedule, at)
+        return cron.get_next(datetime)  # type: ignore[no-any-return]
 
 
 class Runtime(ABC):
@@ -59,7 +69,7 @@ class Scheduler:
     }
 
     def __init__(self) -> None:
-        self.jobs: list[Job] = []
+        self._jobs: list[Job] = []
 
     def _execute(self, job: Job) -> None:
         runtime = self._get_runtime(job)
@@ -69,9 +79,18 @@ class Scheduler:
         return self.RUNTIME_CLASSES[job.runtime]()
 
     def run(self) -> None:
-        while self.jobs:
-            job = self.jobs.pop()
-            self._execute(job)
+        while self._jobs:
+            at = datetime.now()
+            job = self._jobs.pop(0)
+            if not job.next_run:
+                job.next_run = job.calculate_next_run(at)
+
+            if at >= job.next_run:
+                self._execute(job)
+                job.next_run = job.calculate_next_run(job.next_run)
+
+            if job.schedule:
+                self._add(job)
 
     def _add(self, job: Job) -> None:
-        self.jobs.append(job)
+        self._jobs.append(job)

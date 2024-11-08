@@ -1,3 +1,4 @@
+import datetime
 from unittest.mock import patch, create_autospec
 
 import docker
@@ -55,3 +56,23 @@ def test_runtime_docker(mock_docker, command):
     mock_docker_client.containers.run.assert_called_once_with(
         DEFAULT_DOCKER_IMAGE, command, detach=True
     )
+
+
+@pytest.mark.parametrize(
+    "schedule, expected",
+    [
+        (
+            "* * * * *",
+            datetime.datetime(2020, 1, 1, 0, 1),
+        ),
+        (
+            "0 * * * *",
+            datetime.datetime(2020, 1, 1, 1, 0),
+        ),
+    ],
+)
+def test_job_calculate_next_run(schedule, expected):
+    at = datetime.datetime(2020, 1, 1)
+    job = Job("echo 'hello world'", Runtimes.SUBPROCESS, schedule)
+    assert job.calculate_next_run(at) == expected
+
