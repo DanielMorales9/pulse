@@ -3,6 +3,6 @@ from enum import StrEnum
 DEFAULT_DOCKER_IMAGE = "ubuntu"
 
 
-class Runtimes(StrEnum):
+class RuntimeType(StrEnum):
     SUBPROCESS = "subprocess"
     DOCKER = "docker"
