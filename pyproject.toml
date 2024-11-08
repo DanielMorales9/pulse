@@ -14,10 +14,30 @@ docker = "^7.1.0"
 [tool.poetry.group.dev.dependencies]
 black = "^24.10.0"
 mypy = "^1.13.0"
+pytest = "^8.3.3"
+pytest-cov = "^6.0.0"
 
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = "tests"
+addopts = [
+    "--strict-markers",
+    "--verbose",
+    "--cov=scheduler",
+    "--cov-branch",
+    "--cov-report=term-missing:skip-covered",
+    "--cov-fail-under=85",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "@abc.abstractmethod",
+    "raise NotImplementedError",
+]
 
 [tool.mypy]
 python_version = "3.11"
