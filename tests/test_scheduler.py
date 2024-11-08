@@ -1,13 +1,57 @@
-from unittest.mock import patch
+from unittest.mock import patch, create_autospec
+
+import docker
+import pytest
+
+from pulse.constants import Runtimes, DEFAULT_DOCKER_IMAGE
+from pulse.scheduler import (
+    Scheduler,
+    Job,
+    Runtime,
+    SubprocessRuntime,
+    DockerRuntime,
+)
 
 
-from pulse.scheduler import Scheduler, Job
+@pytest.mark.parametrize(
+    "job",
+    [
+        Job(command="echo 'hello world'", runtime=Runtimes.SUBPROCESS),
+        Job(command="echo 'hello world'", runtime=Runtimes.DOCKER),
+    ],
+)
+def test_scheduler_run(job):
+    mock_runtime = create_autospec(Runtime)
+    scheduler = Scheduler()
+    scheduler._add(job)
+    with patch.object(scheduler, "_get_runtime", return_value=mock_runtime):
+        scheduler.run()
+        mock_runtime.run.assert_called_once_with(job)
 
 
 @patch("pulse.scheduler.subprocess")
-def test_scheduler_run(mock_subprocess):
-    job = Job("echo 'hello world'")
-    scheduler = Scheduler()
-    scheduler.add(job)
-    scheduler.run()
-    assert mock_subprocess.run.called
+@pytest.mark.parametrize("command", [["echo", "'hello world'"]])
+def test_runtime_subprocess(mock_subprocess, command):
+    job = Job(command=command, runtime=Runtimes.SUBPROCESS)
+    SubprocessRuntime().run(job)
+    mock_subprocess.run.assert_called_once_with(
+        command,
+        check=True,
+        shell=False,
+        stdout=mock_subprocess.PIPE,
+        stderr=mock_subprocess.PIPE,
+        text=True,
+    )
+
+
+@patch("pulse.scheduler.docker")
+@pytest.mark.parametrize("command", ["echo 'hello world'"])
+def test_runtime_docker(mock_docker, command):
+    job = Job(command=command, runtime=Runtimes.DOCKER)
+    mock_docker.from_env.return_value = mock_docker_client = create_autospec(
+        docker.DockerClient
+    )
+    DockerRuntime().run(job)
+    mock_docker_client.containers.run.assert_called_once_with(
+        DEFAULT_DOCKER_IMAGE, command, detach=True
+    )
