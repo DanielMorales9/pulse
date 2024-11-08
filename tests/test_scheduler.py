@@ -1,10 +1,10 @@
 from unittest.mock import patch
 
 
-from scheduler.scheduler import Scheduler, Job
+from pulse.scheduler import Scheduler, Job
 
 
-@patch("scheduler.scheduler.subprocess")
+@patch("pulse.scheduler.subprocess")
 def test_scheduler_run(mock_subprocess):
     job = Job("echo 'hello world'")
     scheduler = Scheduler()

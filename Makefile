@@ -4,7 +4,7 @@ fmt:
 	poetry run black .
 
 style:
-	poetry run mypy scheduler
+	poetry run mypy pulse
 
 verify: style test
 
