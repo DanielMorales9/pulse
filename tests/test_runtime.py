@@ -45,3 +45,6 @@ def test_runtime_docker(mock_docker, command):
     mock_docker_client.containers.run.assert_called_once_with(
         DEFAULT_DOCKER_IMAGE, command, detach=True
     )
+    assert mock_docker_client.containers.run.return_value.wait.called
+    assert mock_docker_client.containers.run.return_value.logs.called
+    assert mock_docker_client.containers.run.return_value.remove.called

@@ -53,6 +53,7 @@ class DockerRuntime(Runtime, LoggingMixing):
         logs = container.logs(stream=False)
         decoded = logs.decode("utf-8")
         self.logger.info(decoded.strip())
+        container.remove()
 
 
 class RuntimeManager:
