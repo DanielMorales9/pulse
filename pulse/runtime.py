@@ -18,7 +18,7 @@ class SubprocessRuntime(Runtime, LoggingMixing):
     def run(self, job: Job) -> None:
         self.logger.debug("Running command %s", job.command)
         process = subprocess.run(
-            job.command,
+            job.command.split(" ", 1),
             check=True,
             shell=False,
             stdout=subprocess.PIPE,

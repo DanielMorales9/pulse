@@ -9,12 +9,12 @@ from pulse.runtime import SubprocessRuntime, DockerRuntime
 
 
 @patch("pulse.runtime.subprocess")
-@pytest.mark.parametrize("command", [["echo", "'hello world'"]])
+@pytest.mark.parametrize("command", ["echo 'hello world'"])
 def test_runtime_subprocess(mock_subprocess, command):
     job = Job(id=0, command=command, runtime=RuntimeType.SUBPROCESS)
     SubprocessRuntime().run(job)
     mock_subprocess.run.assert_called_once_with(
-        command,
+        command.split(" ", 1),
         check=True,
         shell=False,
         stdout=mock_subprocess.PIPE,

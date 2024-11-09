@@ -9,7 +9,7 @@ from pulse.constants import RuntimeType
 @dataclasses.dataclass
 class Job:
     id: int
-    command: str | list[str]
+    command: str
     runtime: RuntimeType
     schedule: str | None = None
     next_run: datetime | None = None

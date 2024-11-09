@@ -60,7 +60,7 @@ def test_scheduler_loop(mock_datetime, mock_executor):
     scheduler = Scheduler(mock_executor)
     job = Job(
         id=1,
-        command="hello world",
+        command="echo 'hello world'",
         runtime=RuntimeType.SUBPROCESS,
         start_date=datetime.datetime(2024, 1, 1),
         end_date=datetime.datetime(2024, 1, 1, 0, 2),
