@@ -20,13 +20,13 @@ def _execute(job: Job) -> Job:
     return job
 
 
-class SchedulerExecutor(ABC):
+class JobExecutor(ABC):
     @abstractmethod
     def submit(self, job: Job) -> Future:
         pass
 
 
-class ThreadSchedulerExecutor(SchedulerExecutor, LoggingMixing):
+class ThreadJobExecutor(JobExecutor, LoggingMixing):
     def __init__(self) -> None:
         super().__init__()
         self._backend = ThreadPoolExecutor(initializer=initializer)
@@ -35,7 +35,7 @@ class ThreadSchedulerExecutor(SchedulerExecutor, LoggingMixing):
         return self._backend.submit(_execute, job)
 
 
-class ProcessSchedulerExecutor(SchedulerExecutor, LoggingMixing):
+class ProcessJobExecutor(JobExecutor, LoggingMixing):
     def __init__(self) -> None:
         super().__init__()
         self._backend = ProcessPoolExecutor(initializer=initializer)

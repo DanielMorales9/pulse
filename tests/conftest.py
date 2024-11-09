@@ -2,7 +2,7 @@ from unittest.mock import create_autospec
 
 import pytest
 
-from pulse.executor import SchedulerExecutor
+from pulse.executor import JobExecutor
 from pulse.runtime import Runtime, RuntimeManager
 from tests.test_scheduler import _set_result
 
@@ -21,6 +21,6 @@ def mock_runtime_mgr(mock_runtime):
 
 @pytest.fixture
 def mock_executor():
-    mock_executor = create_autospec(SchedulerExecutor)
+    mock_executor = create_autospec(JobExecutor)
     mock_executor.submit.side_effect = _set_result
     yield mock_executor

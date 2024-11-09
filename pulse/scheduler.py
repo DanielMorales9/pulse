@@ -1,7 +1,7 @@
 from concurrent.futures import as_completed, Future
 from datetime import datetime
 
-from pulse.executor import SchedulerExecutor
+from pulse.executor import JobExecutor
 from pulse.logutils import LoggingMixing
 from pulse.models import Job
 
@@ -9,7 +9,7 @@ from pulse.models import Job
 class Scheduler(LoggingMixing):
     TIMEOUT = 1
 
-    def __init__(self, executor: SchedulerExecutor) -> None:
+    def __init__(self, executor: JobExecutor) -> None:
         super().__init__()
         self._jobs: list[Job] = []
         self._executor = executor
