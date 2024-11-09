@@ -24,8 +24,8 @@ class Scheduler:
                 self._execute(job)
                 job.next_run = job.calculate_next_run(job.next_run)
 
-            if job.schedule:
-                self._add(job)
+            if not job.completed:
+                self.add(job)
 
-    def _add(self, job: Job) -> None:
+    def add(self, job: Job) -> None:
         self._jobs.append(job)

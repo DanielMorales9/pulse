@@ -16,7 +16,7 @@ class Runtime(ABC):
 
 class SubprocessRuntime(Runtime, LoggingMixing):
     def run(self, job: Job) -> None:
-        self.logger.info("Running command %s", job.command)
+        self.logger.debug("Running command %s", job.command)
         process = subprocess.run(
             job.command,
             check=True,
@@ -36,7 +36,7 @@ class DockerRuntime(Runtime, LoggingMixing):
         self.client = docker.from_env()
 
     def run(self, job: Job) -> None:
-        self.logger.info("Running command %s", job.command)
+        self.logger.debug("Running command %s", job.command)
         container = self.client.containers.run(
             DEFAULT_DOCKER_IMAGE, job.command, detach=True
         )

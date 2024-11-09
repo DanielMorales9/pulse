@@ -15,8 +15,8 @@ from pulse.runtime import Runtime, SubprocessRuntime, DockerRuntime, RuntimeMana
 @pytest.mark.parametrize(
     "job",
     [
-        Job(command="echo 'hello world'", runtime=RuntimeType.SUBPROCESS),
-        Job(command="echo 'hello world'", runtime=RuntimeType.DOCKER),
+        Job(id=0, command="echo 'hello world'", runtime=RuntimeType.SUBPROCESS),
+        Job(id=0, command="echo 'hello world'", runtime=RuntimeType.DOCKER),
     ],
 )
 def test_scheduler_run(job):
@@ -24,7 +24,7 @@ def test_scheduler_run(job):
     mock_runtime_mgr = create_autospec(RuntimeManager)
     mock_runtime_mgr.get_runtime.return_value = mock_runtime
     scheduler = Scheduler(mock_runtime_mgr)
-    scheduler._add(job)
+    scheduler.add(job)
     scheduler.run()
     mock_runtime.run.assert_called_once_with(job)
 
@@ -32,7 +32,7 @@ def test_scheduler_run(job):
 @patch("pulse.runtime.subprocess")
 @pytest.mark.parametrize("command", [["echo", "'hello world'"]])
 def test_runtime_subprocess(mock_subprocess, command):
-    job = Job(command=command, runtime=RuntimeType.SUBPROCESS)
+    job = Job(id=0, command=command, runtime=RuntimeType.SUBPROCESS)
     SubprocessRuntime().run(job)
     mock_subprocess.run.assert_called_once_with(
         command,
@@ -47,7 +47,7 @@ def test_runtime_subprocess(mock_subprocess, command):
 @patch("pulse.runtime.docker")
 @pytest.mark.parametrize("command", ["echo 'hello world'"])
 def test_runtime_docker(mock_docker, command):
-    job = Job(command=command, runtime=RuntimeType.DOCKER)
+    job = Job(id=0, command=command, runtime=RuntimeType.DOCKER)
     mock_docker.from_env.return_value = mock_docker_client = create_autospec(
         docker.DockerClient
     )
@@ -72,5 +72,5 @@ def test_runtime_docker(mock_docker, command):
 )
 def test_job_calculate_next_run(schedule, expected):
     at = datetime.datetime(2020, 1, 1)
-    job = Job("echo 'hello world'", RuntimeType.SUBPROCESS, schedule)
+    job = Job(0, "echo 'hello world'", RuntimeType.SUBPROCESS, schedule)
     assert job.calculate_next_run(at) == expected
