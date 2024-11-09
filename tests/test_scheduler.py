@@ -26,7 +26,7 @@ def _set_result(x):
 )
 def test_scheduler_run(job, mock_executor):
     scheduler = Scheduler(mock_executor)
-    scheduler.add(job)
+    scheduler.initialize([job])
     scheduler.run()
     mock_executor.submit.assert_called_once_with(job)
 
@@ -57,7 +57,6 @@ def test_scheduler_loop(mock_datetime, mock_executor):
         datetime.datetime(2024, 1, 1, 0, 2),
         datetime.datetime(2024, 1, 1, 0, 3),
     ]
-    scheduler = Scheduler(mock_executor)
     job = Job(
         id=1,
         command="echo 'hello world'",
@@ -66,6 +65,7 @@ def test_scheduler_loop(mock_datetime, mock_executor):
         end_date=datetime.datetime(2024, 1, 1, 0, 2),
         schedule="* * * * *",
     )
-    scheduler.add(job)
+    scheduler = Scheduler(mock_executor)
+    scheduler.initialize([job])
     scheduler.run()
     assert mock_executor.submit.call_count == 2

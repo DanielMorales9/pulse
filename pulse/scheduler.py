@@ -1,44 +1,76 @@
 from concurrent.futures import as_completed, Future
 from datetime import datetime
 
+from pulse.constants import DEFAULT_MAX_PARALLELISM
 from pulse.executor import JobExecutor
 from pulse.logutils import LoggingMixing
 from pulse.models import Job
 
 
 class Scheduler(LoggingMixing):
-    TIMEOUT = 1
+    TIMEOUT = 0.1
+    MAX_RUN_PER_CYCLE = 10
 
-    def __init__(self, executor: JobExecutor) -> None:
+    def __init__(
+        self, executor: JobExecutor, max_parallelism: int = DEFAULT_MAX_PARALLELISM
+    ) -> None:
         super().__init__()
-        self._jobs: list[Job] = []
+        self._pending_jobs: dict[int, Job] = {}
+        self._running_jobs: list[Future] = []
+        self._max_parallelism = max_parallelism
         self._executor = executor
 
+    def initialize(self, jobs: list[Job]) -> None:
+        at = datetime.now()
+        for job in jobs:
+            if not job.next_run:
+                start = job.start_date if job.start_date else at
+                job.next_run = job.calculate_next_run(start)
+            self._pending_jobs[job.id] = job
+
+    def _select_jobs_for_execution(self) -> list[Job]:
+        def priority_fun(job: Job) -> float:
+            assert job.next_run
+            return job.next_run.timestamp()
+
+        sorted_jobs = sorted(self._pending_jobs.values(), key=priority_fun)
+        return sorted_jobs[: self.MAX_RUN_PER_CYCLE]
+
     def run(self) -> None:
-        futures: list[Future] = []
-        while self._jobs or futures:
+        while self._pending_jobs or self._running_jobs:
             at = datetime.now()
-            if self._jobs:
-                job = self._jobs.pop(0)
-                if not job.next_run:
-                    start = job.start_date if job.start_date else at
-                    job.next_run = job.calculate_next_run(start)
+            if len(self._running_jobs) < self._max_parallelism:
+                scheduled = self._schedule_pending(at)
+                self._running_jobs.extend(scheduled)
+            completed_jobs = self._wait_for_completion()
+            self._calculate_pending(completed_jobs)
 
-                if at >= job.next_run:
-                    job.execution_time = at
-                    future = self._executor.submit(job)
-                    futures.append(future)
-                else:
-                    self._jobs.append(job)
+    def _calculate_pending(self, jobs: list[Job]) -> None:
+        for job in jobs:
+            assert job.next_run
+            job.next_run = job.calculate_next_run(job.next_run)
+            if not job.completed:
+                self._pending_jobs[job.id] = job
 
-            for future in as_completed(futures, timeout=self.TIMEOUT):
+    def _wait_for_completion(self) -> list[Job]:
+        completed_jobs = []
+        try:
+            for future in as_completed(self._running_jobs, timeout=self.TIMEOUT):
                 job = future.result()
-                assert job.next_run is not None, "next_run must be non null"
-                job.next_run = job.calculate_next_run(job.next_run)
+                completed_jobs.append(job)
+                self._running_jobs.remove(future)
+        except TimeoutError:
+            self.logger.info("Timeout exceeded")
+        finally:
+            return completed_jobs
 
-                if not job.completed:
-                    self.add(job)
-                futures.remove(future)
-
-    def add(self, job: Job) -> None:
-        self._jobs.append(job)
+    def _schedule_pending(self, at: datetime) -> list[Future]:
+        result = []
+        for job in self._select_jobs_for_execution():
+            assert job.next_run
+            if at >= job.next_run:
+                job.execution_time = at
+                future = self._executor.submit(job)
+                del self._pending_jobs[job.id]
+                result.append(future)
+        return result
