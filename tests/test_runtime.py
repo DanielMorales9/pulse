@@ -1,3 +1,4 @@
+import datetime
 from unittest.mock import patch, create_autospec
 
 import docker
@@ -11,7 +12,12 @@ from pulse.runtime import SubprocessRuntime, DockerRuntime
 @patch("pulse.runtime.subprocess")
 @pytest.mark.parametrize("command", ["echo 'hello world'"])
 def test_runtime_subprocess(mock_subprocess, command):
-    job = Job(id=0, command=command, runtime=RuntimeType.SUBPROCESS)
+    job = Job(
+        id=0,
+        command=command,
+        runtime=RuntimeType.SUBPROCESS,
+        next_run=datetime.datetime(2024, 1, 1),
+    )
     SubprocessRuntime().run(job)
     mock_subprocess.run.assert_called_once_with(
         command.split(" ", 1),
@@ -26,7 +32,12 @@ def test_runtime_subprocess(mock_subprocess, command):
 @patch("pulse.runtime.docker")
 @pytest.mark.parametrize("command", ["echo 'hello world'"])
 def test_runtime_docker(mock_docker, command):
-    job = Job(id=0, command=command, runtime=RuntimeType.DOCKER)
+    job = Job(
+        id=0,
+        command=command,
+        runtime=RuntimeType.DOCKER,
+        next_run=datetime.datetime(2024, 1, 1),
+    )
     mock_docker.from_env.return_value = mock_docker_client = create_autospec(
         docker.DockerClient
     )

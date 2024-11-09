@@ -15,6 +15,7 @@ class Job:
     next_run: datetime | None = None
     start_date: datetime | None = None
     end_date: datetime | None = None
+    execution_time: datetime | None = None
 
     @property
     def completed(self) -> bool:
@@ -31,6 +32,14 @@ class Job:
             return at
         cron = croniter(self.schedule, at)
         return cron.get_next(datetime)  # type: ignore[no-any-return]
+
+    @property
+    def prev_run(self) -> datetime:
+        assert self.next_run
+        if not self.schedule:
+            return self.next_run
+        cron = croniter(self.schedule, self.next_run)
+        return cron.get_prev(datetime)  # type: ignore[no-any-return]
 
     def __repr__(self) -> str:
         fields = ", ".join(

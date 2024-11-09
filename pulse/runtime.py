@@ -9,6 +9,15 @@ from pulse.models import Job
 
 
 class Runtime(ABC):
+    @staticmethod
+    def render_command(job: Job) -> str:
+        return job.command.format(
+            execution_time=job.execution_time,
+            to_date=job.next_run,
+            from_date=job.prev_run,
+            id=job.id,
+        )
+
     @abstractmethod
     def run(self, job: Job) -> None:
         pass
@@ -18,7 +27,7 @@ class SubprocessRuntime(Runtime, LoggingMixing):
     def run(self, job: Job) -> None:
         self.logger.debug("Running command %s", job.command)
         process = subprocess.run(
-            job.command.split(" ", 1),
+            self.render_command(job).split(" ", 1),
             check=True,
             shell=False,
             stdout=subprocess.PIPE,
@@ -38,7 +47,7 @@ class DockerRuntime(Runtime, LoggingMixing):
     def run(self, job: Job) -> None:
         self.logger.debug("Running command %s", job.command)
         container = self.client.containers.run(
-            DEFAULT_DOCKER_IMAGE, job.command, detach=True
+            DEFAULT_DOCKER_IMAGE, self.render_command(job), detach=True
         )
         container.wait()
         logs = container.logs(stream=False)

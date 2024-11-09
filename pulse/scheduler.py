@@ -25,6 +25,7 @@ class Scheduler(LoggingMixing):
                     job.next_run = job.calculate_next_run(start)
 
                 if at >= job.next_run:
+                    job.execution_time = at
                     future = self._executor.submit(job)
                     futures.append(future)
                 else:
