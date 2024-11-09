@@ -1,6 +1,8 @@
+import os
 from abc import ABC, abstractmethod
 from concurrent.futures import Future, ThreadPoolExecutor, ProcessPoolExecutor
 
+from pulse.constants import JobExecutorType
 from pulse.logutils import LoggingMixing
 from pulse.models import Job
 from pulse.runtime import RuntimeManager
@@ -42,3 +44,20 @@ class ProcessJobExecutor(JobExecutor, LoggingMixing):
 
     def submit(self, job: Job) -> Future:
         return self._backend.submit(_execute, job)
+
+
+class JobExecutorManager:
+    EXECUTOR_CLASSES = {
+        JobExecutorType.THREAD: ThreadJobExecutor,
+        JobExecutorType.PROCESS: ProcessJobExecutor,
+    }
+
+    def get_executor(self, executor_type: JobExecutorType) -> JobExecutor:
+        return self.EXECUTOR_CLASSES[executor_type]()
+
+    @staticmethod
+    def parallelism(executor_type: JobExecutorType | str) -> int:
+        base_parallelism = os.cpu_count() or 1
+        if executor_type == JobExecutorType.THREAD:
+            return base_parallelism + 4
+        return base_parallelism

@@ -10,3 +10,8 @@ class RuntimeType(StrEnum):
 
 DEFAULT_LOG_FORMAT = "[%(asctime)s] (P-%(process)s:T-%(thread)d) %(levelname)s %(filename)s:%(lineno)s %(name)s - %(message)s"
 DEFAULT_MAX_PARALLELISM = 20
+
+
+class JobExecutorType(StrEnum):
+    THREAD = "thread"
+    PROCESS = "process"
