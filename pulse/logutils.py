@@ -3,14 +3,13 @@ import os
 
 import sys
 
+from pulse.constants import DEFAULT_LOG_FORMAT
+
 LOG_LEVEL = os.getenv("LOG_LEVEL", logging.INFO)
 
 
 def _build_plain_formatter() -> logging.Formatter:
-    log_format = os.getenv(
-        "LOG_FORMAT",
-        "[%(asctime)s] %(levelname)s %(filename)s:%(lineno)s %(name)s - %(message)s",
-    )
+    log_format = os.getenv("LOG_FORMAT", DEFAULT_LOG_FORMAT)
     return logging.Formatter(log_format)
 
 
