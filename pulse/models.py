@@ -13,6 +13,7 @@ class Job:
     runtime: RuntimeType
     schedule: str | None = None
     next_run: datetime | None = None
+    start_date: datetime | None = None
     end_date: datetime | None = None
 
     @property
@@ -21,7 +22,7 @@ class Job:
             return False
 
         if self.schedule and self.end_date:
-            return self.next_run >= self.end_date
+            return self.next_run > self.end_date
 
         return not self.schedule and self.next_run is not None
 
