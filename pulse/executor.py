@@ -4,7 +4,7 @@ from concurrent.futures import Future, ThreadPoolExecutor, ProcessPoolExecutor
 
 from pulse.constants import JobExecutorType
 from pulse.logutils import LoggingMixing
-from pulse.models import Job
+from pulse.models import Task
 from pulse.runtime import RuntimeManager
 
 
@@ -16,43 +16,43 @@ def initializer() -> None:
     _runtime_manager = RuntimeManager()
 
 
-def _execute(job: Job) -> Job:
-    runtime = _runtime_manager.get_runtime(job.runtime)
-    runtime.run(job)
-    return job
+def _execute(task: Task) -> Task:
+    runtime = _runtime_manager.get_runtime(task.runtime)
+    runtime.run(task)
+    return task
 
 
-class JobExecutor(ABC):
+class TaskExecutor(ABC):
     @abstractmethod
-    def submit(self, job: Job) -> Future:
+    def submit(self, task: Task) -> Future:
         pass
 
 
-class ThreadJobExecutor(JobExecutor, LoggingMixing):
+class ThreadTaskExecutor(TaskExecutor, LoggingMixing):
     def __init__(self) -> None:
         super().__init__()
         self._backend = ThreadPoolExecutor(initializer=initializer)
 
-    def submit(self, job: Job) -> Future:
-        return self._backend.submit(_execute, job)
+    def submit(self, task: Task) -> Future:
+        return self._backend.submit(_execute, task)
 
 
-class ProcessJobExecutor(JobExecutor, LoggingMixing):
+class ProcessTaskExecutor(TaskExecutor, LoggingMixing):
     def __init__(self) -> None:
         super().__init__()
         self._backend = ProcessPoolExecutor(initializer=initializer)
 
-    def submit(self, job: Job) -> Future:
-        return self._backend.submit(_execute, job)
+    def submit(self, task: Task) -> Future:
+        return self._backend.submit(_execute, task)
 
 
 class JobExecutorManager:
     EXECUTOR_CLASSES = {
-        JobExecutorType.THREAD: ThreadJobExecutor,
-        JobExecutorType.PROCESS: ProcessJobExecutor,
+        JobExecutorType.THREAD: ThreadTaskExecutor,
+        JobExecutorType.PROCESS: ProcessTaskExecutor,
     }
 
-    def get_executor(self, executor_type: JobExecutorType) -> JobExecutor:
+    def get_executor(self, executor_type: JobExecutorType) -> TaskExecutor:
         return self.EXECUTOR_CLASSES[executor_type]()
 
     @staticmethod

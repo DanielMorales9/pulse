@@ -15,7 +15,6 @@ class Job:
     next_run: datetime | None = None
     start_date: datetime | None = None
     end_date: datetime | None = None
-    execution_time: datetime | None = None
 
     @property
     def completed(self) -> bool:
@@ -48,3 +47,10 @@ class Job:
             if (value := getattr(self, field.name)) is not None
         )
         return f"Job({fields})"
+
+
+@dataclasses.dataclass
+class Task:
+    job_id: int
+    command: str
+    runtime: RuntimeType

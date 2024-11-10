@@ -2,9 +2,19 @@ from concurrent.futures import as_completed, Future
 from datetime import datetime
 
 from pulse.constants import DEFAULT_MAX_PARALLELISM
-from pulse.executor import JobExecutor
+from pulse.executor import TaskExecutor
 from pulse.logutils import LoggingMixing
-from pulse.models import Job
+from pulse.models import Job, Task
+
+
+def create_task(job: Job, execution_time: datetime) -> Task:
+    rendered_command = job.command.format(
+        execution_time=execution_time,
+        to_date=job.next_run,
+        from_date=job.prev_run,
+        id=job.id,
+    )
+    return Task(job_id=job.id, command=rendered_command, runtime=job.runtime)
 
 
 class Scheduler(LoggingMixing):
@@ -12,9 +22,10 @@ class Scheduler(LoggingMixing):
     MAX_RUN_PER_CYCLE = 10
 
     def __init__(
-        self, executor: JobExecutor, max_parallelism: int = DEFAULT_MAX_PARALLELISM
+        self, executor: TaskExecutor, max_parallelism: int = DEFAULT_MAX_PARALLELISM
     ) -> None:
         super().__init__()
+        self._read_only_jobs: dict[int, Job] = {}
         self._pending_jobs: dict[int, Job] = {}
         self._running_jobs: list[Future] = []
         self._max_parallelism = max_parallelism
@@ -27,6 +38,7 @@ class Scheduler(LoggingMixing):
                 start = job.start_date if job.start_date else at
                 job.next_run = job.calculate_next_run(start)
             self._pending_jobs[job.id] = job
+            self._read_only_jobs[job.id] = job
 
     @staticmethod
     def job_priority(job: Job) -> float:
@@ -62,7 +74,8 @@ class Scheduler(LoggingMixing):
         completed_jobs = []
         try:
             for future in as_completed(self._running_jobs, timeout=self.TIMEOUT):
-                job = future.result()
+                task = future.result()
+                job = self._read_only_jobs[task.job_id]
                 completed_jobs.append(job)
                 self._running_jobs.remove(future)
         except TimeoutError:
@@ -73,8 +86,8 @@ class Scheduler(LoggingMixing):
     def _schedule_pending(self, at: datetime) -> list[Future]:
         result = []
         for job in self._select_jobs_for_execution(at):
-            job.execution_time = at
-            future = self._executor.submit(job)
+            task = create_task(job, at)
+            future = self._executor.submit(task)
             del self._pending_jobs[job.id]
             result.append(future)
         return result

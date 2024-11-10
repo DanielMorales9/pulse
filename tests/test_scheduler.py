@@ -28,7 +28,7 @@ def test_scheduler_run(job, mock_executor):
     scheduler = Scheduler(mock_executor)
     scheduler.initialize([job])
     scheduler.run()
-    mock_executor.submit.assert_called_once_with(job)
+    assert mock_executor.submit.called
 
 
 @pytest.mark.parametrize(

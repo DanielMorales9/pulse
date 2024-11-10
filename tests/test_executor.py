@@ -4,19 +4,19 @@ import pytest
 
 from pulse.constants import JobExecutorType
 from pulse.executor import (
-    ThreadJobExecutor,
+    ThreadTaskExecutor,
     _execute,
-    ProcessJobExecutor,
+    ProcessTaskExecutor,
     JobExecutorManager,
 )
-from pulse.models import Job
+from pulse.models import Task
 
 
 @patch("pulse.executor.ThreadPoolExecutor")
 def test_thread_executor(mock_pool_executor_class):
     mock_pool_executor = mock_pool_executor_class.return_value
-    executor = ThreadJobExecutor()
-    magic_mock = MagicMock(spec=Job)
+    executor = ThreadTaskExecutor()
+    magic_mock = MagicMock(spec=Task)
     executor.submit(magic_mock)
     mock_pool_executor.submit.assert_called_once_with(_execute, magic_mock)
 
@@ -24,8 +24,8 @@ def test_thread_executor(mock_pool_executor_class):
 @patch("pulse.executor.ProcessPoolExecutor")
 def test_process_executor(mock_pool_executor_class):
     mock_pool_executor = mock_pool_executor_class.return_value
-    executor = ProcessJobExecutor()
-    magic_mock = MagicMock(spec=Job)
+    executor = ProcessTaskExecutor()
+    magic_mock = MagicMock(spec=Task)
     executor.submit(magic_mock)
     mock_pool_executor.submit.assert_called_once_with(_execute, magic_mock)
 
@@ -36,15 +36,15 @@ def manager():
 
 
 def test_get_executor_thread(manager):
-    # Test if THREAD executor type returns an instance of ThreadJobExecutor
+    # Test if THREAD executor type returns an instance of ThreadTaskExecutor
     executor = manager.get_executor(JobExecutorType.THREAD)
-    assert isinstance(executor, ThreadJobExecutor)
+    assert isinstance(executor, ThreadTaskExecutor)
 
 
 def test_get_executor_process(manager):
-    # Test if PROCESS executor type returns an instance of ProcessJobExecutor
+    # Test if PROCESS executor type returns an instance of ProcessTaskExecutor
     executor = manager.get_executor(JobExecutorType.PROCESS)
-    assert isinstance(executor, ProcessJobExecutor)
+    assert isinstance(executor, ProcessTaskExecutor)
 
 
 @patch("os.cpu_count", return_value=4)
