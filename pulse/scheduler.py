@@ -28,12 +28,18 @@ class Scheduler(LoggingMixing):
                 job.next_run = job.calculate_next_run(start)
             self._pending_jobs[job.id] = job
 
-    def _select_jobs_for_execution(self) -> list[Job]:
-        def priority_fun(job: Job) -> float:
-            assert job.next_run
-            return job.next_run.timestamp()
+    @staticmethod
+    def job_priority(job: Job) -> float:
+        assert job.next_run
+        return job.next_run.timestamp()
 
-        sorted_jobs = sorted(self._pending_jobs.values(), key=priority_fun)
+    def _select_jobs_for_execution(self, at: datetime) -> list[Job]:
+        due_jobs = (
+            job
+            for job in self._pending_jobs.values()
+            if job.next_run and at >= job.next_run
+        )
+        sorted_jobs = sorted(due_jobs, key=self.job_priority)
         return sorted_jobs[: self.MAX_RUN_PER_CYCLE]
 
     def run(self) -> None:
@@ -66,11 +72,9 @@ class Scheduler(LoggingMixing):
 
     def _schedule_pending(self, at: datetime) -> list[Future]:
         result = []
-        for job in self._select_jobs_for_execution():
-            assert job.next_run
-            if at >= job.next_run:
-                job.execution_time = at
-                future = self._executor.submit(job)
-                del self._pending_jobs[job.id]
-                result.append(future)
+        for job in self._select_jobs_for_execution(at):
+            job.execution_time = at
+            future = self._executor.submit(job)
+            del self._pending_jobs[job.id]
+            result.append(future)
         return result
