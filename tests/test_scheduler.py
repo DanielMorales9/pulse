@@ -52,7 +52,7 @@ def test_job_calculate_next_run(schedule, expected):
 
 @patch("pulse.scheduler.datetime")
 def test_scheduler_loop(mock_datetime, mock_executor):
-    mock_datetime.now.side_effect = [
+    mock_datetime.utcnow.side_effect = [
         datetime.datetime(2024, 1, 1, 0, 1),
         datetime.datetime(2024, 1, 1, 0, 2),
         datetime.datetime(2024, 1, 1, 0, 3),

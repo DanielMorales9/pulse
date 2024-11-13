@@ -32,7 +32,7 @@ class Scheduler(LoggingMixing):
         self._executor = executor
 
     def initialize(self, jobs: list[Job]) -> None:
-        at = datetime.now()
+        at = datetime.utcnow()
         for job in jobs:
             if not job.next_run:
                 start = job.start_date if job.start_date else at
@@ -56,7 +56,7 @@ class Scheduler(LoggingMixing):
 
     def run(self) -> None:
         while self._pending_jobs or self._running_jobs:
-            at = datetime.now()
+            at = datetime.utcnow()
             if len(self._running_jobs) < self._max_parallelism:
                 scheduled = self._schedule_pending(at)
                 self._running_jobs.extend(scheduled)
