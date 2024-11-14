@@ -8,7 +8,7 @@ from pulse.constants import RuntimeType
 from pulse.scheduler import (
     Scheduler,
 )
-from pulse.models import Job
+from pulse.models import Job, get_cron_next_value
 
 
 def _set_result(x):
@@ -32,7 +32,7 @@ def test_scheduler_run(job, mock_executor):
 
 
 @pytest.mark.parametrize(
-    "schedule, expected",
+    "expression, expected",
     [
         (
             "* * * * *",
@@ -44,10 +44,9 @@ def test_scheduler_run(job, mock_executor):
         ),
     ],
 )
-def test_job_calculate_next_run(schedule, expected):
+def test_get_cron_next_value(expression, expected):
     at = datetime.datetime(2020, 1, 1)
-    job = Job(0, "echo 'hello world'", RuntimeType.SUBPROCESS, schedule)
-    assert job.calculate_next_run(at) == expected
+    assert get_cron_next_value(expression, at) == expected
 
 
 @patch("pulse.scheduler.datetime")
