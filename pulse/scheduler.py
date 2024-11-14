@@ -1,6 +1,8 @@
 from concurrent.futures import as_completed, Future
 from datetime import datetime
 
+import yaml
+
 from pulse.constants import DEFAULT_MAX_PARALLELISM
 from pulse.executor import TaskExecutor
 from pulse.logutils import LoggingMixing
@@ -8,13 +10,16 @@ from pulse.models import Job, Task
 
 
 def create_task(job: Job, execution_time: datetime) -> Task:
-    rendered_command = job.command.format(
+    with open(job.file_loc) as f:
+        obj = yaml.safe_load(f)
+
+    rendered_command = obj["command"].format(
         execution_time=execution_time,
         from_date=job.date_interval_start,
         to_date=job.date_interval_end,
         job_id=job.id,
     )
-    return Task(job_id=job.id, command=rendered_command, runtime=job.runtime)
+    return Task(job_id=job.id, command=rendered_command, runtime=obj["runtime"])
 
 
 class Scheduler(LoggingMixing):

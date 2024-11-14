@@ -1,5 +1,6 @@
 import dataclasses
 from datetime import datetime
+from pathlib import Path
 
 from croniter import croniter
 
@@ -19,8 +20,7 @@ def get_cron_prev_value(expression: str, at: datetime) -> datetime:
 @dataclasses.dataclass
 class Job:
     id: int
-    command: str
-    runtime: RuntimeType
+    file_loc: Path
     schedule: str | None
     start_date: datetime
     end_date: datetime | None
@@ -30,15 +30,13 @@ class Job:
     def __init__(
         self,
         id: int,
-        command: str,
-        runtime: RuntimeType,
+        file_loc: Path,
         schedule: str | None = None,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
     ):
         self.id = id
-        self.command = command
-        self.runtime = runtime
+        self.file_loc = file_loc
         self.schedule = schedule
         self.start_date = start_date or datetime.utcnow()
         self.end_date = end_date
