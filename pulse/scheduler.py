@@ -42,15 +42,16 @@ class Scheduler(LoggingMixing):
 
     @staticmethod
     def job_priority(job: Job) -> float:
+        assert job.next_run
         return job.next_run.timestamp()
 
     def _select_jobs_for_execution(self, at: datetime) -> list[Job]:
-        due_jobs = (job for job in self._retrieve_pending_jobs() if at >= job.next_run)
+        due_jobs = (job for job in self._jobs if job.next_run and at >= job.next_run)
         sorted_jobs = sorted(due_jobs, key=self.job_priority)
         return sorted_jobs[: self.MAX_RUN_PER_CYCLE]
 
     def _retrieve_pending_jobs(self) -> list[Job]:
-        return [job for job in self._jobs if not job.completed]
+        return [job for job in self._jobs if job.next_run]
 
     def run(self) -> None:
         while self._retrieve_pending_jobs() or self._running_jobs:

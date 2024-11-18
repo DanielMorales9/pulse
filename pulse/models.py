@@ -24,7 +24,7 @@ class Job:
     schedule: str | None
     start_date: datetime
     end_date: datetime | None
-    next_run: datetime
+    next_run: datetime | None
     last_run: datetime | None = None  # will be replaced by job run
 
     def __init__(
@@ -40,26 +40,19 @@ class Job:
         self.schedule = schedule
         self.start_date = start_date or datetime.utcnow()
         self.end_date = end_date
+        self.next_run = None
         self.calculate_next_run()
 
-    @property
-    def completed(self) -> bool:
-        if not self.next_run:
-            return False
-
-        if not self.schedule:
-            return self.last_run is not None
-
-        if self.end_date:
-            return self.next_run > self.end_date
-        return False
-
     def calculate_next_run(self) -> None:
-        if not self.schedule:
+        if not self.schedule and not self.last_run:
             self.next_run = self.start_date
-            return
-        base = self.last_run or self.start_date
-        self.next_run = get_cron_next_value(self.schedule, base)
+        elif not self.schedule:
+            self.next_run = None
+        elif self.end_date and self.next_run and self.next_run >= self.end_date:
+            self.next_run = None
+        else:
+            base = self.last_run or self.start_date
+            self.next_run = get_cron_next_value(self.schedule, base)
 
     @property
     def date_interval_start(self) -> datetime:
@@ -69,15 +62,8 @@ class Job:
 
     @property
     def date_interval_end(self) -> datetime:
+        assert self.next_run
         return self.next_run
-
-    def __repr__(self) -> str:
-        fields = ", ".join(
-            f"{field.name}={value}"
-            for field in dataclasses.fields(self)
-            if (value := getattr(self, field.name)) is not None
-        )
-        return f"Job({fields})"
 
 
 @dataclasses.dataclass
