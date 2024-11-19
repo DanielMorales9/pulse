@@ -3,6 +3,8 @@ from datetime import datetime
 from pathlib import Path
 
 from croniter import croniter
+from sqlalchemy import Integer, Column, String, Text, DateTime
+from sqlalchemy.ext.declarative import declarative_base
 
 from pulse.constants import RuntimeType
 
@@ -17,20 +19,24 @@ def get_cron_prev_value(expression: str, at: datetime) -> datetime:
     return cron.get_prev(datetime)  # type: ignore[no-any-return]
 
 
-@dataclasses.dataclass
-class Job:
-    id: int
-    file_loc: Path
-    schedule: str | None
-    start_date: datetime
-    end_date: datetime | None
-    next_run: datetime | None
-    last_run: datetime | None = None  # will be replaced by job run
+Base = declarative_base()
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+
+    id = Column(Integer, nullable=False, primary_key=True)
+    file_loc = Column(String, nullable=False)
+    schedule = Column(Text, nullable=True)
+    start_date = Column(DateTime, nullable=False)
+    end_date = Column(DateTime, nullable=True)
+    next_run = Column(DateTime, nullable=True)
+    last_run = Column(DateTime, nullable=True)
 
     def __init__(
         self,
         id: int,
-        file_loc: Path,
+        file_loc: str,
         schedule: str | None = None,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
