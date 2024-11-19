@@ -51,6 +51,7 @@ omit = [
 
 [tool.mypy]
 python_version = "3.11"
+plugins = [ "sqlmypy" ]
 disallow_untyped_defs = true
 show_error_codes = true
 no_implicit_optional = true
