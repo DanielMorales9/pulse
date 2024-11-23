@@ -2,7 +2,7 @@ from concurrent.futures import as_completed, Future
 from datetime import datetime
 
 import yaml
-from sqlalchemy import func, select
+from sqlalchemy import func
 from sqlalchemy.orm import sessionmaker, Session
 
 from pulse.constants import DEFAULT_MAX_PARALLELISM
@@ -15,9 +15,9 @@ class JobRepository:
     @staticmethod
     def select_jobs_for_execution(session: Session, limit: int) -> list[Job]:
         running_ids = set(
-            session.scalars(  # type: ignore[attr-defined]
-                select(JobRun.job_id).where(JobRun.status == JobRunStatus.RUNNING)
-            )
+            session.query(JobRun.job_id)
+            .filter(JobRun.status == JobRunStatus.RUNNING)
+            .all()
         )
         return (
             session.query(Job)
@@ -85,11 +85,6 @@ class Scheduler(LoggingMixing):
         self._max_parallelism = max_parallelism
         self._executor = executor
         self._create_session = create_session
-
-    def initialize(self, jobs: list[Job]) -> None:
-        with self._create_session() as session:
-            session.add_all(jobs)
-            session.commit()
 
     def run(self) -> None:
         with self._create_session() as session:

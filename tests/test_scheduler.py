@@ -1,15 +1,15 @@
 import datetime
 from concurrent.futures import Future
-from unittest.mock import patch
+from unittest.mock import MagicMock
 
 import pytest
+from sqlalchemy.orm import sessionmaker, session
 
 from pulse.constants import RuntimeType
-from pulse.scheduler import (
-    Scheduler,
-)
-from pulse.models import Job, get_cron_next_value
-from pulse.utils import create_job_file
+from pulse.executor import TaskExecutor
+from pulse.models import Job, get_cron_next_value, Task
+from pulse.scheduler import Scheduler
+from pulse.utils import save_yaml
 
 
 def _set_result(x):
@@ -23,23 +23,30 @@ def mock_job(request, tmp_path):
     obj = request.param
     file_path = tmp_path / "job.yaml"
     file_path.touch()
-    create_job_file(file_path, obj)
-    yield Job(id=0, file_loc=file_path)
+    save_yaml(file_path, obj)
+    yield Job(file_loc=str(file_path))
 
 
-@pytest.mark.parametrize(
-    "mock_job",
-    [
-        dict(command="echo 'hello world'", runtime=RuntimeType.SUBPROCESS.value),
-        dict(command="echo 'hello world'", runtime=RuntimeType.DOCKER.value),
-    ],
-    indirect=True,
-)
-def test_scheduler_run(mock_job, mock_executor):
-    scheduler = Scheduler(mock_executor)
-    scheduler.initialize([mock_job])
-    scheduler.run()
-    assert mock_executor.submit.called
+@pytest.fixture
+def mock_session():
+    yield MagicMock(spec=session)
+
+
+@pytest.fixture
+def mock_create_session(mock_session):
+    mock_create_session = MagicMock(spec=sessionmaker)
+    mock_create_session.return_value.__enter__.return_value = mock_session
+    yield mock_create_session
+
+
+@pytest.fixture
+def mock_executor():
+    yield MagicMock(spec=TaskExecutor)
+
+
+@pytest.fixture
+def scheduler_fixture(mock_executor, mock_create_session):
+    yield Scheduler(mock_executor, mock_create_session)
 
 
 @pytest.mark.parametrize(
@@ -60,24 +67,13 @@ def test_get_cron_next_value(expression, expected):
     assert get_cron_next_value(expression, at) == expected
 
 
-@patch("pulse.scheduler.datetime")
-def test_scheduler_loop(mock_datetime, mock_executor, tmp_path):
-    obj = dict(command="echo 'hello world'", runtime=RuntimeType.SUBPROCESS.value)
-    file_path = tmp_path / "job.yaml"
-    file_path.touch()
-    mock_datetime.utcnow.side_effect = [
-        datetime.datetime(2024, 1, 1, 0, 1),
-        datetime.datetime(2024, 1, 1, 0, 2),
-        datetime.datetime(2024, 1, 1, 0, 3),
-    ]
-    job = Job(
-        id=1,
-        file_loc=create_job_file(file_path, obj),
-        start_date=datetime.datetime(2024, 1, 1),
-        end_date=datetime.datetime(2024, 1, 1, 0, 2),
-        schedule="* * * * *",
+def test_execute_tasks(scheduler_fixture, mock_executor):
+    task = Task(
+        job_id="job1",
+        job_run_id="run1",
+        command="command",
+        runtime=RuntimeType.SUBPROCESS,
     )
-    scheduler = Scheduler(mock_executor)
-    scheduler.initialize([job])
-    scheduler.run()
-    assert mock_executor.submit.call_count == 2
+    tasks = [task]
+    scheduler_fixture._execute_tasks(tasks)
+    mock_executor.submit.assert_called_once_with(task)

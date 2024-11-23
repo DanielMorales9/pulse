@@ -13,7 +13,8 @@ from pulse.runtime import SubprocessRuntime, DockerRuntime
 @pytest.mark.parametrize("command", ["echo 'hello world'"])
 def test_runtime_subprocess(mock_subprocess, command):
     job = Task(
-        job_id=0,
+        job_id="jcb1d",
+        job_run_id="j0brun1d",
         command=command,
         runtime=RuntimeType.SUBPROCESS,
     )
@@ -32,7 +33,8 @@ def test_runtime_subprocess(mock_subprocess, command):
 @pytest.mark.parametrize("command", ["echo 'hello world'"])
 def test_runtime_docker(mock_docker, command):
     job = Task(
-        job_id=0,
+        job_id="jcb1d",
+        job_run_id="j0brun1d",
         command=command,
         runtime=RuntimeType.DOCKER,
     )

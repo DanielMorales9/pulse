@@ -4,9 +4,9 @@ from datetime import datetime
 from enum import StrEnum
 
 from croniter import croniter
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Enum, UUID  # type: ignore[attr-defined]
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Enum
+from sqlalchemy.orm import relationship, Mapped
+from sqlalchemy.orm import declarative_base
 
 from pulse.constants import RuntimeType
 
@@ -27,18 +27,18 @@ Base = declarative_base()
 class Job(Base):
     __tablename__ = "jobs"
 
-    id = Column(
-        UUID(as_uuid=True),
+    id: Mapped[str] = Column(
+        String,
         primary_key=True,
         default=uuid.uuid4,
         nullable=False,
     )
-    file_loc = Column(String, nullable=False)
-    schedule = Column(Text, nullable=True)
-    start_date = Column(DateTime, nullable=False)
-    end_date = Column(DateTime, nullable=True)
-    next_run = Column(DateTime, nullable=True)
-    last_run = Column(DateTime, nullable=True)
+    file_loc: Mapped[str] = Column(String, nullable=False)
+    schedule: Mapped[str | None] = Column(Text, nullable=True)
+    start_date: Mapped[datetime] = Column(DateTime, nullable=False)
+    end_date: Mapped[datetime | None] = Column(DateTime, nullable=True)
+    next_run: Mapped[datetime | None] = Column(DateTime, nullable=True)
+    last_run: Mapped[datetime | None] = Column(DateTime, nullable=True)
 
     def __init__(
         self,
@@ -85,19 +85,19 @@ class JobRunStatus(StrEnum):
 class JobRun(Base):
     __tablename__ = "job_runs"
 
-    id = Column(
-        UUID(as_uuid=True),
+    id: Mapped[str] = Column(
+        String,
         primary_key=True,
         default=uuid.uuid4,
         nullable=False,
     )
-    job_id = Column(UUID(as_uuid=True), ForeignKey("jobs.id"), nullable=False)
-    status = Column(Enum(JobRunStatus), nullable=False)
-    date_interval_start = Column(DateTime, nullable=False)
-    date_interval_end = Column(DateTime, nullable=True)
-    execution_time = Column(DateTime, nullable=True)
+    job_id: Mapped[str] = Column(String, ForeignKey("jobs.id"), nullable=False)
+    status: Mapped[JobRunStatus] = Column(Enum(JobRunStatus), nullable=False)
+    date_interval_start: Mapped[datetime] = Column(DateTime, nullable=False)
+    date_interval_end: Mapped[datetime] = Column(DateTime, nullable=True)
+    execution_time: Mapped[datetime] = Column(DateTime, nullable=True)
 
-    job = relationship("Job")
+    job: Mapped[Job] = relationship("Job")
 
 
 @dataclasses.dataclass

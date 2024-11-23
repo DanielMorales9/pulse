@@ -4,7 +4,6 @@ from typing import Any
 import yaml
 
 
-def create_job_file(temp_file_path: Path | str, data: dict[str, Any]) -> Path:
-    with open(temp_file_path, mode="w") as f:
-        yaml.safe_dump(data, f)
-    return Path(temp_file_path)
+def save_yaml(file_path: Path | str, obj: dict[str, Any]) -> None:
+    with open(file_path, mode="w") as f:
+        yaml.safe_dump(obj, f)
