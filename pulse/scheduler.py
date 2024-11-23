@@ -1,28 +1,44 @@
 from concurrent.futures import as_completed, Future
 from datetime import datetime
+from typing import Iterable
 
-import yaml
-from sqlalchemy import func, select
+from sqlalchemy import func
 from sqlalchemy.orm import sessionmaker, Session
 
 from pulse.constants import DEFAULT_MAX_PARALLELISM
 from pulse.executor import TaskExecutor
 from pulse.logutils import LoggingMixing
 from pulse.models import Job, Task, JobRun, JobRunStatus
+from pulse.runtime import TaskExecutionError
+from pulse.utils import load_yaml
+
+
+class JobRunRepository:
+    @staticmethod
+    def find_jobs_by_ids(ids: list[str], session: Session) -> list[JobRun]:
+        return session.query(JobRun).filter(JobRun.id.in_(ids)).all()
+
+    @staticmethod
+    def find_job_runs_by_state(state: JobRunStatus, session: Session) -> list[JobRun]:
+        return session.query(JobRun).filter(JobRun.status == state).all()
+
+    @staticmethod
+    def find_job_runs_in_states(
+        states: Iterable[JobRunStatus], session: Session
+    ) -> list[JobRun]:
+        return session.query(JobRun).filter(JobRun.status.in_(states)).all()
 
 
 class JobRepository:
     @staticmethod
     def select_jobs_for_execution(session: Session, limit: int) -> list[Job]:
-        running_ids = set(
-            session.scalars(
-                select(JobRun.job_id).where(JobRun.status == JobRunStatus.RUNNING)
-            )
-        )
+        states = (JobRunStatus.RUNNING, JobRunStatus.FAILED)
+        runs = JobRunRepository.find_job_runs_in_states(states, session)
+        running_or_failed_ids = {run.job_id for run in runs}
         return (
             session.query(Job)
             .filter(func.now() >= Job.next_run)
-            .filter(Job.id.not_in(running_ids))
+            .filter(Job.id.not_in(running_or_failed_ids))
             .order_by(Job.next_run)
             .limit(limit)
             .all()
@@ -37,16 +53,10 @@ class JobRepository:
         return session.query(Job).filter(Job.id.in_(ids)).all()
 
 
-class JobRunRepository:
-    @staticmethod
-    def find_jobs_by_ids(ids: list[str], session: Session) -> list[JobRun]:
-        return session.query(JobRun).filter(JobRun.id.in_(ids)).all()
-
-
 def _create_task(job_run: JobRun) -> Task:
     job = job_run.job
-    with open(job.file_loc) as f:
-        obj = yaml.safe_load(f)
+    file_path = job.file_loc
+    obj = load_yaml(file_path)
 
     rendered_command = obj["command"].format(
         execution_time=job_run.execution_time,
@@ -94,9 +104,9 @@ class Scheduler(LoggingMixing):
                     tasks = self._create_tasks_from_job_runs(scheduled_runs)
                     self._execute_tasks(tasks)
 
-                completed_tasks = self._wait_for_completion()
-                job_run_ids = [task.job_run_id for task in completed_tasks]
-                complete_job_runs = self._complete_job_runs(job_run_ids, session)
+                success_run_ids, failed_run_ids = self._wait_for_completion()
+                complete_job_runs = self._succeed_job_runs(success_run_ids, session)
+                _ = self._fail_job_runs(failed_run_ids, session)
                 self._calculate_pending(complete_job_runs)
 
                 session.commit()
@@ -109,25 +119,42 @@ class Scheduler(LoggingMixing):
             job.last_run = job.next_run
             job.calculate_next_run()
 
-    def _wait_for_completion(self) -> list[Task]:
-        tasks = []
+    def _wait_for_completion(self) -> tuple[list[str], list[str]]:
+        success, failed = [], []
         try:
             for future in as_completed(self._running_jobs, timeout=self.TIMEOUT):
-                task = future.result()
-                tasks.append(task)
-                self._running_jobs.remove(future)
+                try:
+                    task = future.result()
+                    success.append(task.job_run_id)
+                except TaskExecutionError as e:
+                    self.logger.exception("Task failure")
+                    failed.append(e.job_run_id)
+                finally:
+                    self._running_jobs.remove(future)  # TODO this is an anti-pattern
         except TimeoutError:
             self.logger.debug("Timeout exceeded")
         finally:
-            return tasks
+            return success, failed
 
     @staticmethod
-    def _complete_job_runs(job_run_ids: list[str], session: Session) -> list[JobRun]:
+    def _transition_job_runs(
+        job_run_ids: list[str], status: JobRunStatus, session: Session
+    ) -> list[JobRun]:
         job_runs = []
         for job_run in JobRunRepository.find_jobs_by_ids(job_run_ids, session):
-            job_run.status = JobRunStatus.COMPLETED
+            job_run.status = status
             job_runs.append(job_run)
         return job_runs
+
+    @staticmethod
+    def _succeed_job_runs(job_run_ids: list[str], session: Session) -> list[JobRun]:
+        return Scheduler._transition_job_runs(
+            job_run_ids, JobRunStatus.SUCCESS, session
+        )
+
+    @staticmethod
+    def _fail_job_runs(job_run_ids: list[str], session: Session) -> list[JobRun]:
+        return Scheduler._transition_job_runs(job_run_ids, JobRunStatus.FAILED, session)
 
     def _schedule_job_runs(self, session: Session) -> list[JobRun]:
         job_runs = []
@@ -135,10 +162,15 @@ class Scheduler(LoggingMixing):
         for job in JobRepository.select_jobs_for_execution(
             session, self.MAX_RUN_PER_CYCLE
         ):
-            job_runs.append(_create_run_from_job(job, at))
+            job_run = _create_run_from_job(job, at)
+            job_runs.append(job_run)
         session.add_all(job_runs)
         session.flush()
-        return job_runs
+
+        failed_runs = JobRunRepository.find_job_runs_by_state(
+            JobRunStatus.FAILED, session
+        )
+        return job_runs + failed_runs
 
     @staticmethod
     def _create_tasks_from_job_runs(job_runs: list[JobRun]) -> list[Task]:

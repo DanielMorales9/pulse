@@ -8,6 +8,13 @@ from pulse.logutils import LoggingMixing
 from pulse.models import Task
 
 
+class TaskExecutionError(RuntimeError):
+    def __init__(self, job_id: str, job_run_id: str):
+        super().__init__(f"Task for job run {job_run_id} for job {job_id}")
+        self.job_id = job_id
+        self.job_run_id = job_run_id
+
+
 class Runtime(ABC):
     @abstractmethod
     def run(self, task: Task) -> None:
@@ -17,17 +24,20 @@ class Runtime(ABC):
 class SubprocessRuntime(Runtime, LoggingMixing):
     def run(self, task: Task) -> None:
         self.logger.debug("Running command %s", task.command)
-        process = subprocess.run(
-            task.command.split(" ", 1),
-            check=True,
-            shell=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-        for line in process.stdout.splitlines():
-            log = line.strip()
-            self.logger.info(log)
+        try:
+            process = subprocess.run(
+                task.command,
+                check=True,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            for line in process.stdout.splitlines():
+                log = line.strip()
+                self.logger.info(log)
+        except subprocess.CalledProcessError as e:
+            raise TaskExecutionError(task.job_id, task.job_run_id) from e
 
 
 class DockerRuntime(Runtime, LoggingMixing):

@@ -20,9 +20,9 @@ def test_runtime_subprocess(mock_subprocess, command):
     )
     SubprocessRuntime().run(job)
     mock_subprocess.run.assert_called_once_with(
-        command.split(" ", 1),
+        command,
         check=True,
-        shell=False,
+        shell=True,
         stdout=mock_subprocess.PIPE,
         stderr=mock_subprocess.PIPE,
         text=True,

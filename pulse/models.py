@@ -83,7 +83,8 @@ class Job(Base):
 
 class JobRunStatus(StrEnum):
     RUNNING = "running"
-    COMPLETED = "completed"
+    SUCCESS = "success"
+    FAILED = "failed"
 
 
 class JobRun(Base):
