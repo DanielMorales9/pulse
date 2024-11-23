@@ -1,10 +1,12 @@
 import dataclasses
+import uuid
 from datetime import datetime
-from pathlib import Path
+from enum import StrEnum
 
 from croniter import croniter
-from sqlalchemy import Integer, Column, String, Text, DateTime
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Enum, UUID  # type: ignore[attr-defined]
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import relationship
 
 from pulse.constants import RuntimeType
 
@@ -25,7 +27,12 @@ Base = declarative_base()
 class Job(Base):
     __tablename__ = "jobs"
 
-    id = Column(Integer, nullable=False, primary_key=True)
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        nullable=False,
+    )
     file_loc = Column(String, nullable=False)
     schedule = Column(Text, nullable=True)
     start_date = Column(DateTime, nullable=False)
@@ -35,13 +42,11 @@ class Job(Base):
 
     def __init__(
         self,
-        id: int,
         file_loc: str,
         schedule: str | None = None,
         start_date: datetime | None = None,
         end_date: datetime | None = None,
     ):
-        self.id = id
         self.file_loc = file_loc
         self.schedule = schedule
         self.start_date = start_date or datetime.utcnow()
@@ -72,8 +77,32 @@ class Job(Base):
         return self.next_run
 
 
+class JobRunStatus(StrEnum):
+    RUNNING = "running"
+    COMPLETED = "completed"
+
+
+class JobRun(Base):
+    __tablename__ = "job_runs"
+
+    id = Column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+        nullable=False,
+    )
+    job_id = Column(UUID(as_uuid=True), ForeignKey("jobs.id"), nullable=False)
+    status = Column(Enum(JobRunStatus), nullable=False)
+    date_interval_start = Column(DateTime, nullable=False)
+    date_interval_end = Column(DateTime, nullable=True)
+    execution_time = Column(DateTime, nullable=True)
+
+    job = relationship("Job")
+
+
 @dataclasses.dataclass
 class Task:
-    job_id: int
+    job_id: str
+    job_run_id: str
     command: str
     runtime: RuntimeType
