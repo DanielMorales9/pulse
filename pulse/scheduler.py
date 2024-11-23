@@ -2,7 +2,7 @@ from concurrent.futures import as_completed, Future
 from datetime import datetime
 
 import yaml
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker, Session
 
 from pulse.constants import DEFAULT_MAX_PARALLELISM
@@ -15,9 +15,9 @@ class JobRepository:
     @staticmethod
     def select_jobs_for_execution(session: Session, limit: int) -> list[Job]:
         running_ids = set(
-            session.query(JobRun.job_id)
-            .filter(JobRun.status == JobRunStatus.RUNNING)
-            .all()
+            session.scalars(
+                select(JobRun.job_id).where(JobRun.status == JobRunStatus.RUNNING)
+            )
         )
         return (
             session.query(Job)

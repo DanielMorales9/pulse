@@ -5,8 +5,8 @@ from enum import StrEnum
 
 from croniter import croniter
 from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Enum
-from sqlalchemy.orm import relationship, Mapped
 from sqlalchemy.orm import declarative_base
+from sqlalchemy.orm import relationship, Mapped
 
 from pulse.constants import RuntimeType
 
@@ -24,13 +24,17 @@ def get_cron_prev_value(expression: str, at: datetime) -> datetime:
 Base = declarative_base()
 
 
+def uuid4_gen() -> str:
+    return str(uuid.uuid4())
+
+
 class Job(Base):
     __tablename__ = "jobs"
 
     id: Mapped[str] = Column(
         String,
         primary_key=True,
-        default=uuid.uuid4,
+        default=uuid4_gen,
         nullable=False,
     )
     file_loc: Mapped[str] = Column(String, nullable=False)
@@ -88,7 +92,7 @@ class JobRun(Base):
     id: Mapped[str] = Column(
         String,
         primary_key=True,
-        default=uuid.uuid4,
+        default=uuid4_gen,
         nullable=False,
     )
     job_id: Mapped[str] = Column(String, ForeignKey("jobs.id"), nullable=False)
