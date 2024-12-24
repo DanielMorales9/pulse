@@ -1,0 +1,115 @@
+import datetime
+from unittest.mock import MagicMock, patch
+
+from pulse.models import JobRunStatus, Job, JobRun
+from pulse.repository import JobRunRepository, JobRepository
+
+
+def test_find_job_runs_by_ids(mock_session):
+    # Arrange
+    ids = ["1", "2", "3"]
+    expected_jobs = [MagicMock(id="1"), MagicMock(id="2"), MagicMock(id="3")]
+    mock_session.query.return_value.filter.return_value.all.return_value = expected_jobs
+
+    # Act
+    result = JobRunRepository.find_job_runs_by_ids(ids, mock_session)
+
+    # Assert
+    mock_session.query.assert_called_once()
+    mock_session.query.return_value.filter.assert_called_once()
+    assert result == expected_jobs
+
+
+def test_find_jobs_by_ids(mock_session):
+    # Arrange
+    ids = ["1", "2"]
+    expected_jobs = [MagicMock(id="1"), MagicMock(id="2")]
+    mock_session.query.return_value.filter.return_value.all.return_value = expected_jobs
+
+    # Act
+    result = JobRepository.find_jobs_by_ids(ids, mock_session)
+
+    # Assert
+    mock_session.query.assert_called_once()
+    assert mock_session.query.return_value.filter.called
+    assert result == expected_jobs
+
+
+def test_find_job_runs_by_state(mock_session):
+    # Arrange
+    state = JobRunStatus.RUNNING
+    expected_jobs = [MagicMock(status=state)]
+    mock_session.query.return_value.filter.return_value.all.return_value = expected_jobs
+
+    # Act
+    result = JobRunRepository.find_job_runs_by_state(state, mock_session)
+
+    # Assert
+    mock_session.query.assert_called_once()
+    assert mock_session.query.return_value.filter.called
+    assert result == expected_jobs
+
+
+def test_find_job_runs_in_states(mock_session):
+    # Arrange
+    states = [JobRunStatus.RUNNING, JobRunStatus.FAILED]
+    expected_jobs = [MagicMock(status=state) for state in states]
+    mock_session.query.return_value.filter.return_value.all.return_value = expected_jobs
+
+    # Act
+    result = JobRunRepository.find_job_runs_in_states(states, mock_session)
+
+    # Assert
+    mock_session.query.assert_called_once()
+    assert mock_session.query.return_value.filter.called
+    assert result == expected_jobs
+
+
+@patch("pulse.scheduler.JobRunRepository.find_job_runs_in_states")
+def test_select_jobs_for_execution(mock_find_job_runs_in_states, mock_session):
+    # Arrange
+    mock_find_job_runs_in_states.return_value = [
+        MagicMock(job_id="1"),
+        MagicMock(job_id="2"),
+    ]
+    limit = 5
+    expected_jobs = [MagicMock(next_run="2024-11-02"), MagicMock(next_run="2024-11-03")]
+    mock_session.query.return_value.filter.return_value.filter.return_value.order_by.return_value.limit.return_value.all.return_value = (
+        expected_jobs
+    )
+
+    # Act
+    result = JobRepository.select_jobs_for_execution(mock_session, limit)
+
+    # Assert
+    mock_find_job_runs_in_states.assert_called_once_with(
+        (JobRunStatus.RUNNING, JobRunStatus.FAILED), mock_session
+    )
+    mock_session.query.assert_called_once()
+    assert result == expected_jobs
+
+
+def test_count_pending_jobs(mock_session):
+    # Arrange
+    mock_session.query.return_value.filter.return_value.count.return_value = 42
+
+    # Act
+    result = JobRepository.count_pending_jobs(mock_session)
+
+    # Assert
+    mock_session.query.assert_called_once()
+    assert mock_session.query.return_value.filter.called
+    assert result == 42
+
+
+def test_create_run_from_job():
+    execution_time = datetime.datetime(year=2024, month=1, day=1)
+    mock_job = MagicMock(spec=Job)
+    mock_job.id = "1"
+    job_run = JobRunRepository.create_run_from_job(
+        mock_job, execution_time=execution_time
+    )
+    assert job_run.job_id == "1"
+    assert job_run.status == "running"
+    assert job_run.retry_number == 0
+    assert job_run.execution_time == execution_time
