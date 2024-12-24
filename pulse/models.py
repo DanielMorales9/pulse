@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 
 from croniter import croniter
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Enum
+from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Enum, Integer
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import relationship, Mapped
 
@@ -101,6 +101,7 @@ class JobRun(Base):
     date_interval_start: Mapped[datetime] = Column(DateTime, nullable=False)
     date_interval_end: Mapped[datetime] = Column(DateTime, nullable=True)
     execution_time: Mapped[datetime] = Column(DateTime, nullable=True)
+    retry_number: Mapped[int] = Column(Integer, nullable=False)
 
     job: Mapped[Job] = relationship("Job")
 

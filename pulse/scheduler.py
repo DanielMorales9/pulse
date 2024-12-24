@@ -28,6 +28,17 @@ class JobRunRepository:
     ) -> list[JobRun]:
         return session.query(JobRun).filter(JobRun.status.in_(states)).all()
 
+    @staticmethod
+    def create_run_from_job(job: Job, execution_time: datetime) -> JobRun:
+        return JobRun(
+            job_id=job.id,
+            status=JobRunStatus.RUNNING,
+            date_interval_start=job.date_interval_start,
+            date_interval_end=job.date_interval_end,
+            execution_time=execution_time,
+            retry_number=0,
+        )
+
 
 class JobRepository:
     @staticmethod
@@ -55,8 +66,7 @@ class JobRepository:
 
 def _create_task(job_run: JobRun) -> Task:
     job = job_run.job
-    file_path = job.file_loc
-    obj = load_yaml(file_path)
+    obj = load_yaml(job.file_loc)
 
     rendered_command = obj["command"].format(
         execution_time=job_run.execution_time,
@@ -67,16 +77,6 @@ def _create_task(job_run: JobRun) -> Task:
     runtime = obj["runtime"]
     return Task(
         job_id=job.id, job_run_id=job_run.id, command=rendered_command, runtime=runtime
-    )
-
-
-def _create_run_from_job(job: Job, execution_time: datetime) -> JobRun:
-    return JobRun(
-        job_id=job.id,
-        status=JobRunStatus.RUNNING,
-        date_interval_start=job.date_interval_start,
-        date_interval_end=job.date_interval_end,
-        execution_time=execution_time,
     )
 
 
@@ -143,6 +143,7 @@ class Scheduler(LoggingMixing):
         job_runs = []
         for job_run in JobRunRepository.find_jobs_by_ids(job_run_ids, session):
             job_run.status = status
+            job_run.retry_number = job_run.retry_number + 1
             job_runs.append(job_run)
         return job_runs
 
@@ -162,7 +163,7 @@ class Scheduler(LoggingMixing):
         for job in JobRepository.select_jobs_for_execution(
             session, self.MAX_RUN_PER_CYCLE
         ):
-            job_run = _create_run_from_job(job, at)
+            job_run = JobRunRepository.create_run_from_job(job, at)
             job_runs.append(job_run)
         session.add_all(job_runs)
         session.flush()
