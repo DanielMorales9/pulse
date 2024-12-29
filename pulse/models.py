@@ -1,31 +1,24 @@
 import dataclasses
-import uuid
 from datetime import datetime
-from enum import StrEnum
 
-from croniter import croniter
-from sqlalchemy import Column, String, Text, DateTime, ForeignKey, Enum, Integer
+from sqlalchemy import (
+    Column,
+    String,
+    Text,
+    DateTime,
+    ForeignKey,
+    Enum,
+    Integer,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import relationship, Mapped
 
-from pulse.constants import RuntimeType
-
-
-def get_cron_next_value(expression: str, at: datetime) -> datetime:
-    cron = croniter(expression, at)
-    return cron.get_next(datetime)  # type: ignore[no-any-return]
-
-
-def get_cron_prev_value(expression: str, at: datetime) -> datetime:
-    cron = croniter(expression, at)
-    return cron.get_prev(datetime)  # type: ignore[no-any-return]
-
+from pulse.constants import RuntimeType, JobRunStatus, DEFAULT_SCHEDULE
+from pulse.timetable import create_timetable
+from pulse.utils import get_cron_prev_value, uuid4_gen
 
 Base = declarative_base()
-
-
-def uuid4_gen() -> str:
-    return str(uuid.uuid4())
 
 
 class Job(Base):
@@ -43,6 +36,8 @@ class Job(Base):
     end_date: Mapped[datetime | None] = Column(DateTime, nullable=True)
     next_run: Mapped[datetime | None] = Column(DateTime, nullable=True)
     last_run: Mapped[datetime | None] = Column(DateTime, nullable=True)
+    date_interval_start: Mapped[datetime | None] = Column(DateTime, nullable=True)
+    date_interval_end: Mapped[datetime | None] = Column(DateTime, nullable=True)
 
     def __init__(
         self,
@@ -55,36 +50,17 @@ class Job(Base):
         self.schedule = schedule
         self.start_date = start_date or datetime.utcnow()
         self.end_date = end_date
-        self.next_run = None
-        self.calculate_next_run()
-
-    def calculate_next_run(self) -> None:
-        if not self.schedule and not self.last_run:
-            self.next_run = self.start_date
-        elif not self.schedule:
-            self.next_run = None
-        elif self.end_date and self.next_run and self.next_run >= self.end_date:
-            self.next_run = None
-        else:
-            base = self.last_run or self.start_date
-            self.next_run = get_cron_next_value(self.schedule, base)
-
-    @property
-    def date_interval_start(self) -> datetime:
-        if not self.schedule:
-            return self.date_interval_end
-        return get_cron_prev_value(self.schedule, self.date_interval_end)
-
-    @property
-    def date_interval_end(self) -> datetime:
-        assert self.next_run
-        return self.next_run
+        calculate_next_run(self)
 
 
-class JobRunStatus(StrEnum):
-    RUNNING = "running"
-    SUCCESS = "success"
-    FAILED = "failed"
+def calculate_next_run(job: Job) -> None:
+    timetable = create_timetable(job.schedule)
+    job.next_run = timetable.calculate(job)
+    if not job.next_run:
+        return
+    schedule = job.schedule or DEFAULT_SCHEDULE
+    job.date_interval_start = get_cron_prev_value(schedule, job.next_run)
+    job.date_interval_end = job.next_run
 
 
 class JobRun(Base):
@@ -102,6 +78,10 @@ class JobRun(Base):
     date_interval_end: Mapped[datetime] = Column(DateTime, nullable=True)
     execution_time: Mapped[datetime] = Column(DateTime, nullable=True)
     retry_number: Mapped[int] = Column(Integer, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("job_id", "date_interval_start", name="uix_run"),
+    )
 
     job: Mapped[Job] = relationship("Job")
 

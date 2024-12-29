@@ -48,12 +48,12 @@ class ProcessTaskExecutor(TaskExecutor, LoggingMixing):
 
 class JobExecutorManager:
     EXECUTOR_CLASSES = {
-        JobExecutorType.THREAD: ThreadTaskExecutor,
-        JobExecutorType.PROCESS: ProcessTaskExecutor,
+        JobExecutorType.THREAD: ThreadTaskExecutor(),
+        JobExecutorType.PROCESS: ProcessTaskExecutor(),
     }
 
     def get_executor(self, executor_type: JobExecutorType) -> TaskExecutor:
-        return self.EXECUTOR_CLASSES[executor_type]()
+        return self.EXECUTOR_CLASSES[executor_type]
 
     @staticmethod
     def parallelism(executor_type: JobExecutorType | str) -> int:

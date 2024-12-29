@@ -1,7 +1,7 @@
-from unittest.mock import create_autospec, MagicMock
+from unittest.mock import create_autospec
 
 import pytest
-from sqlalchemy.orm import session
+from sqlalchemy.orm import Session
 
 from pulse.executor import TaskExecutor
 from pulse.runtime import Runtime, RuntimeManager
@@ -29,4 +29,4 @@ def mock_executor():
 
 @pytest.fixture
 def mock_session():
-    yield MagicMock(spec=session)
+    yield create_autospec(Session)

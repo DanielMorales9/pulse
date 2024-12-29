@@ -1,10 +1,19 @@
+import datetime
+import uuid
+
 import pytest
 import yaml
 from pathlib import Path
 
 from yaml.scanner import ScannerError
 
-from pulse.utils import save_yaml, load_yaml
+from pulse.utils import (
+    save_yaml,
+    load_yaml,
+    get_cron_next_value,
+    get_cron_prev_value,
+    uuid4_gen,
+)
 
 
 @pytest.fixture
@@ -67,3 +76,50 @@ def test_save_yaml_raises_ioerror_on_invalid_path(sample_data):
     # Act & Assert
     with pytest.raises(IOError):
         save_yaml(invalid_file_path, sample_data)
+
+
+@pytest.mark.parametrize(
+    "expression, expected",
+    [
+        (
+            "* * * * *",
+            datetime.datetime(2020, 1, 1, 0, 1),
+        ),
+        (
+            "0 * * * *",
+            datetime.datetime(2020, 1, 1, 1, 0),
+        ),
+    ],
+)
+def test_get_cron_next_value(expression, expected):
+    at = datetime.datetime(2020, 1, 1)
+    assert get_cron_next_value(expression, at) == expected
+
+
+@pytest.mark.parametrize(
+    "expression, expected",
+    [
+        (
+            "* * * * *",
+            datetime.datetime(2019, 12, 31, 23, 59),
+        ),
+        (
+            "0 * * * *",
+            datetime.datetime(2019, 12, 31, 23),
+        ),
+    ],
+)
+def test_get_cron_prev_value(expression, expected):
+    at = datetime.datetime(2020, 1, 1)
+    assert get_cron_prev_value(expression, at) == expected
+
+
+def test_uuid4_gen():
+    # Generate a UUID
+    result = uuid4_gen()
+
+    # Assert that the result is a string
+    assert isinstance(result, str)
+
+    # Assert that the result can be converted back to a UUID object
+    assert uuid.UUID(result)
