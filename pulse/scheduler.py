@@ -5,34 +5,20 @@ from typing import Self, Any
 
 from sqlalchemy.orm import sessionmaker, Session
 
-from pulse.constants import DEFAULT_MAX_PARALLELISM, JobRunStatus
+from pulse.constants import DEFAULT_MAX_PARALLELISM, JobRunStatus, TaskInstanceStatus
 from pulse.executor import TaskExecutor
 from pulse.logutils import LoggingMixing
-from pulse.models import Task, JobRun
-
-from pulse.repository import JobRepository, JobRunRepository
+from pulse.models import JobRun, TaskInstance
+from pulse.repository import (
+    JobRepository,
+    JobRunRepository,
+    TaskInstanceRepository,
+)
 from pulse.runtime import TaskExecutionError
-from pulse.utils import load_yaml
 
 
 class RuntimeInconsistencyCheckError(Exception):
     """Raised when an inconsistency is found during a runtime consistency check."""
-
-
-def _create_task(job_run: JobRun) -> Task:
-    job = job_run.job
-    obj = load_yaml(job.file_loc)
-
-    rendered_command = obj["command"].format(
-        execution_time=job_run.execution_time,
-        from_date=job_run.date_interval_start,
-        to_date=job_run.date_interval_end,
-        job_id=job.id,
-    )
-    runtime = obj["runtime"]
-    return Task(
-        job_id=job.id, job_run_id=job_run.id, command=rendered_command, runtime=runtime
-    )
 
 
 def list_factory() -> list[str]:
@@ -45,23 +31,23 @@ class TasksResults:
     failed: list[str] = field(default_factory=list_factory)
 
 
-def check_for_inconsistent_job_runs(result: TasksResults) -> None:
-    """Checks for inconsistencies in job results, such as duplicate job run IDs across the specified statuses."""
+def check_for_inconsistent_task_instances(result: TasksResults) -> None:
+    """Checks for inconsistent task instances results, such as duplicate IDs across the specified statuses."""
     succeeded_set = set(result.success)
     if len(result.success) != len(succeeded_set):
         raise RuntimeInconsistencyCheckError(
-            f"Duplicate job run IDs found in status '{JobRunStatus.SUCCESS}'"
+            f"Duplicate Task Instance IDs found in status '{TaskInstanceStatus.SUCCESS}'"
         )
 
     failed_set = set(result.failed)
     if len(result.failed) != len(failed_set):
         raise RuntimeInconsistencyCheckError(
-            f"Duplicate job run IDs found in status '{JobRunStatus.FAILED}'"
+            f"Duplicate Task Instance IDs found in status '{TaskInstanceStatus.FAILED}'"
         )
 
     if duplicates := succeeded_set & failed_set:
         raise RuntimeInconsistencyCheckError(
-            f"Duplicate job run IDs found more than one status: {duplicates}"
+            f"Duplicate Task Instance IDs found more than one status: {duplicates}"
         )
 
 
@@ -72,6 +58,7 @@ class Scheduler(LoggingMixing):
     _session: Session
     _jop_repo: JobRepository
     _job_run_repo: JobRunRepository
+    _ti_repo: TaskInstanceRepository
 
     def __init__(
         self,
@@ -89,6 +76,7 @@ class Scheduler(LoggingMixing):
         self._session = self._create_session()
         self._job_repo = JobRepository(self._session)
         self._job_run_repo = JobRunRepository(self._session)
+        self._ti_repo = TaskInstanceRepository(self._session)
         return self
 
     def __exit__(self, exc_type: Any, exc_value: Any, traceback: Any) -> None:
@@ -99,25 +87,37 @@ class Scheduler(LoggingMixing):
             while self._job_repo.count_pending_jobs() > 0 or self._futures:
                 if len(self._futures) < self._max_parallelism:
                     scheduled_runs = self.create_pending_job_runs()
+                    tis = self._ti_repo.create_task_instances_from_job_runs(
+                        scheduled_runs
+                    )
                     updated_runs = self._job_run_repo.transition_job_runs_by_state(
                         JobRunStatus.FAILED, JobRunStatus.RUNNING
                     )
-                    tasks = self._create_tasks_from_job_runs(
-                        scheduled_runs + updated_runs
+                    failed_tis = self._ti_repo.find_task_instances_by_job_run_ids(
+                        [run.id for run in updated_runs]
                     )
-                    self._execute_tasks(tasks)
+                    self.execute_tasks(tis + failed_tis)
 
                 results = self.wait_for_completion()
-                check_for_inconsistent_job_runs(results)
+                check_for_inconsistent_task_instances(results)
 
-                success = self._job_run_repo.transition_job_runs(
-                    results.success,
+                success_tis = self._ti_repo.transition_task_instances(
+                    results.success, TaskInstanceStatus.SUCCESS
+                )
+                success_runs = self._job_run_repo.transition_job_runs_state(
+                    [ti.job_run for ti in success_tis],
                     JobRunStatus.SUCCESS,
                 )
-                _ = self._job_run_repo.transition_job_runs(
-                    results.failed, JobRunStatus.FAILED
+                failed_tis = self._ti_repo.transition_task_instances(
+                    results.failed, TaskInstanceStatus.FAILED
                 )
-                self._job_repo.calculate_next_run([job_run.job for job_run in success])
+                _ = self._job_run_repo.transition_job_runs_state(
+                    [ti.job_run for ti in failed_tis],
+                    JobRunStatus.FAILED,
+                )
+                self._job_repo.calculate_next_run(
+                    [job_run.job for job_run in success_runs]
+                )
 
     def wait_for_completion(self) -> TasksResults:
         result = TasksResults()
@@ -127,10 +127,10 @@ class Scheduler(LoggingMixing):
                 try:
                     _completed.add(future)
                     task = future.result()
-                    result.success.append(task.job_run_id)
+                    result.success.append(task.id)
                 except TaskExecutionError as e:
-                    self.logger.exception(f"Task failed for id={e.job_run_id}")
-                    result.failed.append(e.job_run_id)
+                    self.logger.exception(f"Task failed for id={e.task_id}")
+                    result.failed.append(e.task_id)
         except TimeoutError:
             num_jobs = len(self._futures)
             self.logger.warning("Timeout exceeded: %d jobs remaining.", num_jobs)
@@ -139,17 +139,9 @@ class Scheduler(LoggingMixing):
             return result
 
     def create_pending_job_runs(self) -> list[JobRun]:
-        at = datetime.utcnow()
         jobs = self._job_repo.get_pending_jobs(self.MAX_RUN_PER_CYCLE)
-        job_runs = [self._job_run_repo.create_run_from_job(job, at) for job in jobs]
-        self._session.add_all(job_runs)
-        self._session.commit()
-        return job_runs
+        return self._job_run_repo.create_job_runs_from_jobs(jobs)
 
-    @staticmethod
-    def _create_tasks_from_job_runs(job_runs: list[JobRun]) -> list[Task]:
-        return [_create_task(job_run) for job_run in job_runs]
-
-    def _execute_tasks(self, tasks: list[Task]) -> None:
-        running = [self._executor.submit(task) for task in tasks]
+    def execute_tasks(self, tasks: list[TaskInstance]) -> None:
+        running = [self._executor.submit(task.exchange_data) for task in tasks]
         self._futures.extend(running)

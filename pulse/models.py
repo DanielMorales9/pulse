@@ -1,4 +1,4 @@
-import dataclasses
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import (
@@ -14,7 +14,12 @@ from sqlalchemy import (
 from sqlalchemy.orm import declarative_base
 from sqlalchemy.orm import relationship, Mapped
 
-from pulse.constants import RuntimeType, JobRunStatus, DEFAULT_SCHEDULE
+from pulse.constants import (
+    RuntimeType,
+    JobRunStatus,
+    DEFAULT_SCHEDULE,
+    TaskInstanceStatus,
+)
 from pulse.timetable import create_timetable
 from pulse.utils import get_cron_prev_value, uuid4_gen
 
@@ -77,7 +82,7 @@ class JobRun(Base):
     date_interval_start: Mapped[datetime] = Column(DateTime, nullable=False)
     date_interval_end: Mapped[datetime] = Column(DateTime, nullable=True)
     execution_time: Mapped[datetime] = Column(DateTime, nullable=True)
-    retry_number: Mapped[int] = Column(Integer, nullable=False)
+    retry_number: Mapped[int] = Column(Integer, nullable=False, default=0)
 
     __table_args__ = (
         UniqueConstraint("job_id", "date_interval_start", name="uix_run"),
@@ -86,9 +91,44 @@ class JobRun(Base):
     job: Mapped[Job] = relationship("Job")
 
 
-@dataclasses.dataclass
+@dataclass(frozen=True, kw_only=True)
 class Task:
-    job_id: str
-    job_run_id: str
+    id: str
     command: str
     runtime: RuntimeType
+
+
+class TaskInstance(Base):
+    __tablename__ = "task_instances"
+
+    id: Mapped[str] = Column(
+        String,
+        primary_key=True,
+        default=uuid4_gen,
+        nullable=False,
+    )
+    job_run_id: Mapped[str] = Column(String, ForeignKey("job_runs.id"), nullable=False)
+    status: Mapped[TaskInstanceStatus] = Column(
+        Enum(TaskInstanceStatus), nullable=False
+    )
+    command: Mapped[str] = Column(String, nullable=False)
+    runtime: Mapped[RuntimeType] = Column(Enum(RuntimeType), nullable=False)
+    retry_number: Mapped[int] = Column(Integer, nullable=False, default=0)
+
+    job_run: Mapped[JobRun] = relationship("JobRun")
+
+    @property
+    def rendered_command(self) -> str:
+        return self.command.format(
+            execution_time=self.job_run.execution_time,
+            from_date=self.job_run.date_interval_start,
+            to_date=self.job_run.date_interval_end,
+        )
+
+    @property
+    def exchange_data(self) -> Task:
+        return Task(
+            id=self.id,
+            command=self.rendered_command,
+            runtime=self.runtime,
+        )

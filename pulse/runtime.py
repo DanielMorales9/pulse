@@ -9,9 +9,9 @@ from pulse.models import Task
 
 
 class TaskExecutionError(RuntimeError):
-    def __init__(self, job_run_id: str):
-        super().__init__(f"Task for job run {job_run_id}")
-        self.job_run_id = job_run_id
+    def __init__(self, task_id: str) -> None:
+        super().__init__(task_id)
+        self.task_id = task_id
 
 
 class Runtime(ABC):
@@ -36,7 +36,7 @@ class SubprocessRuntime(Runtime, LoggingMixing):
                 log = line.strip()
                 self.logger.info(log)
         except subprocess.CalledProcessError as e:
-            raise TaskExecutionError(task.job_run_id) from e
+            raise TaskExecutionError(task.id) from e
 
 
 class DockerRuntime(Runtime, LoggingMixing):

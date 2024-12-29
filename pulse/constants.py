@@ -25,3 +25,9 @@ class JobRunStatus(StrEnum):
 
 UNFINISHED_JOB_RUN_STATES = (JobRunStatus.RUNNING, JobRunStatus.FAILED)
 DEFAULT_SCHEDULE = "0 * * * *"
+
+
+class TaskInstanceStatus(StrEnum):
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
