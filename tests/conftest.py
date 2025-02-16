@@ -1,12 +1,14 @@
-from unittest.mock import create_autospec
+from concurrent.futures import Future
+from unittest.mock import create_autospec, MagicMock
 
 import pytest
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from pulse.executor import TaskExecutor
 from pulse.repository import JobRepository, JobRunRepository, TaskInstanceRepository
 from pulse.runtime import Runtime, RuntimeManager
-from tests.test_scheduler import _set_result
+from pulse.scheduler import Scheduler
+from pulse.task_queue import TaskQueue, InMemoryTaskQueue
 
 
 @pytest.fixture
@@ -24,7 +26,6 @@ def mock_runtime_mgr(mock_runtime):
 @pytest.fixture
 def mock_executor():
     mock_executor = create_autospec(TaskExecutor)
-    mock_executor.submit.side_effect = _set_result
     yield mock_executor
 
 
@@ -61,3 +62,31 @@ def mock_job_run_repo(mock_session):
 @pytest.fixture
 def mock_ti_repo(mock_session):
     yield create_autospec(TaskInstanceRepository)
+
+
+def _set_result(x):
+    future = Future()
+    future.set_result(x)
+    return future
+
+
+@pytest.fixture
+def mock_create_session(mock_session):
+    mock_create_session = MagicMock(spec=sessionmaker)
+    mock_create_session.return_value.__enter__.return_value = mock_session
+    yield mock_create_session
+
+
+@pytest.fixture
+def mock_task_queue():
+    yield MagicMock(spec=TaskQueue)
+
+
+@pytest.fixture
+def in_memory_task_queue(mock_executor):
+    yield InMemoryTaskQueue(mock_executor)
+
+
+@pytest.fixture
+def scheduler(mock_executor, mock_create_session, mock_task_queue):
+    yield Scheduler(mock_create_session, task_queue=mock_task_queue)

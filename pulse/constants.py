@@ -1,3 +1,4 @@
+import os
 from enum import StrEnum
 
 DEFAULT_DOCKER_IMAGE = "ubuntu"
@@ -31,3 +32,12 @@ class TaskInstanceStatus(StrEnum):
     RUNNING = "running"
     SUCCESS = "success"
     FAILED = "failed"
+
+
+class EnvEnum(StrEnum):
+    TEST = "test"
+    DEV = "dev"
+    PROD = "prod"
+
+
+ENV = os.getenv("ENV", EnvEnum.TEST)

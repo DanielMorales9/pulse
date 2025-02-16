@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from enum import StrEnum
 
 from sqlalchemy import (
     Column,
@@ -132,3 +133,14 @@ class TaskInstance(Base):
             command=self.rendered_command,
             runtime=self.runtime,
         )
+
+
+class TaskResultStatus(StrEnum):
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+@dataclass(frozen=True, kw_only=True)
+class TaskResult:
+    id: str
+    status: TaskResultStatus

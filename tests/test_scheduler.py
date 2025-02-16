@@ -1,28 +1,17 @@
-from concurrent.futures import Future
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import Session
 
 from pulse.constants import RuntimeType
-from pulse.executor import TaskExecutor
 from pulse.models import Job, Task, JobRun, TaskInstance
 from pulse.repository import JobRepository, JobRunRepository
-from pulse.runtime import TaskExecutionError
 from pulse.scheduler import (
-    Scheduler,
     RuntimeInconsistencyCheckError,
     check_for_inconsistent_task_instances,
-    TasksResults,
 )
 from pulse.utils import save_yaml
-
-
-def _set_result(x):
-    future = Future()
-    future.set_result(x)
-    return future
 
 
 @pytest.fixture
@@ -34,24 +23,7 @@ def mock_job(request, tmp_path):
     yield Job(file_loc=str(file_path))
 
 
-@pytest.fixture
-def mock_create_session(mock_session):
-    mock_create_session = MagicMock(spec=sessionmaker)
-    mock_create_session.return_value.__enter__.return_value = mock_session
-    yield mock_create_session
-
-
-@pytest.fixture
-def mock_executor():
-    yield MagicMock(spec=TaskExecutor)
-
-
-@pytest.fixture
-def scheduler(mock_executor, mock_create_session):
-    yield Scheduler(mock_executor, mock_create_session)
-
-
-def test_execute_tasks(scheduler, mock_executor):
+def test_execute_tasks(scheduler, mock_task_queue):
     mock_task = MagicMock(spec=TaskInstance)
     mock_task.exchange_data = mock_exchange = Task(
         id="job1",
@@ -59,18 +31,18 @@ def test_execute_tasks(scheduler, mock_executor):
         runtime=RuntimeType.SUBPROCESS,
     )
     scheduler.execute_tasks([mock_task])
-    mock_executor.submit.assert_called_once_with(mock_exchange)
+    mock_task_queue.send.assert_called_once_with(mock_exchange)
 
 
 # Parametrize test for valid cases (no duplicates)
 @pytest.mark.parametrize(
     "result",
     [
-        TasksResults(
+        dict(
             success=["job_1", "job_2", "job_3"],
             failed=["job_4", "job_5"],
         ),
-        TasksResults(
+        dict(
             success=["job_1", "job_2"],
             failed=["job_3", "job_4"],
         ),
@@ -79,7 +51,7 @@ def test_execute_tasks(scheduler, mock_executor):
 def test_no_inconsistencies(result):
     # Should not raise an exception
     try:
-        check_for_inconsistent_task_instances(result)
+        check_for_inconsistent_task_instances(**result)
     except RuntimeInconsistencyCheckError:
         pytest.fail("RuntimeInconsistencyCheckError raised unexpectedly!")
 
@@ -89,7 +61,7 @@ def test_no_inconsistencies(result):
     "result, expected_message",
     [
         (
-            TasksResults(
+            dict(
                 success=[
                     "job_1",
                     "job_2",
@@ -100,7 +72,7 @@ def test_no_inconsistencies(result):
             "Duplicate Task Instance IDs found in status 'success'",
         ),
         (
-            TasksResults(
+            dict(
                 success=["job_1", "job_2", "job_3"],
                 failed=[
                     "job_2",
@@ -111,7 +83,7 @@ def test_no_inconsistencies(result):
             "Duplicate Task Instance IDs found in status 'failed'",
         ),
         (
-            TasksResults(
+            dict(
                 success=["job_1", "job_2", "job_3"],
                 failed=[
                     "job_2",
@@ -125,58 +97,12 @@ def test_no_inconsistencies(result):
 def test_inconsistencies(result, expected_message: str):
     # Should raise RuntimeInconsistencyCheckError with the correct message
     with pytest.raises(RuntimeInconsistencyCheckError, match=expected_message):
-        check_for_inconsistent_task_instances(result)
+        check_for_inconsistent_task_instances(**result)
 
 
 @pytest.fixture
 def running_jobs():
     yield [MagicMock(), MagicMock()]
-
-
-@patch("pulse.scheduler.as_completed")
-def test_wait_for_completion_success(mock_as_completed, scheduler, running_jobs):
-    # Mock the _futures and result behavior
-    job_task = MagicMock(spec=TaskInstance, job_run_id="job_run_1", id="task_1")
-    running_jobs[0].result.return_value = job_task  # Mock result for successful task
-    running_jobs[1].result.return_value = job_task  # Mock result for successful task
-    mock_as_completed.return_value = running_jobs
-
-    result = scheduler.wait_for_completion()
-
-    # Check that the result dictionary has the correct success status
-    assert result.success == ["task_1", "task_1"]
-    # Ensure that the future result method was called
-    running_jobs[0].result.assert_called_once()
-    running_jobs[1].result.assert_called_once()
-
-
-@patch("pulse.scheduler.as_completed")
-def test_wait_for_completion_failure(mock_as_completed, scheduler, running_jobs):
-    # Mock the _futures and result behavior to raise TaskExecutionError
-    running_jobs[0].result.side_effect = TaskExecutionError("task_1")
-    running_jobs[1].result.side_effect = TaskExecutionError("task_2")
-    mock_as_completed.return_value = running_jobs
-
-    result = scheduler.wait_for_completion()
-
-    # Check that the result dictionary has the correct failure status
-    assert result.failed == ["task_1", "task_2"]
-    # Ensure that the future result method was called
-    running_jobs[0].result.assert_called_once()
-    running_jobs[1].result.assert_called_once()
-
-
-@patch("pulse.scheduler.as_completed")
-def test_wait_for_completion_timeout(mock_as_completed, scheduler, running_jobs):
-    # Simulate timeout by making the future jobs take too long
-    running_jobs[0].result.side_effect = TimeoutError("job_1 timeout")
-    running_jobs[1].result.side_effect = TimeoutError("job_2 timeout")
-    mock_as_completed.return_value = running_jobs
-
-    result = scheduler.wait_for_completion()
-
-    # Test that the result is empty or whatever you expect in case of timeout
-    assert result == TasksResults()
 
 
 def test_cm_session(scheduler, mock_create_session, mock_session):

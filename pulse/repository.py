@@ -121,8 +121,8 @@ class TaskInstanceRepository:
     def transition_task_instances(
         self, ti_ids: list[str], status: TaskInstanceStatus
     ) -> list[TaskInstance]:
-        job_runs = self.find_task_instances_by_ids(ti_ids)
-        return self.transition_task_instances_state(job_runs, status)
+        tis = self.find_task_instances_by_ids(ti_ids)
+        return self.transition_task_instances_state(tis, status)
 
     @staticmethod
     def create_task_instance_from_job_run(job_run: JobRun) -> TaskInstance:
