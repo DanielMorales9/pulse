@@ -2,7 +2,13 @@ from typing import Self, Any
 
 from sqlalchemy.orm import sessionmaker, Session
 
-from pulse.constants import DEFAULT_MAX_PARALLELISM, JobRunStatus, TaskInstanceStatus, EnvEnum, ENV
+from pulse.constants import (
+    DEFAULT_MAX_PARALLELISM,
+    JobRunStatus,
+    TaskInstanceStatus,
+    EnvEnum,
+    ENV,
+)
 from pulse.logutils import LoggingMixing
 from pulse.models import JobRun, TaskInstance, TaskResultStatus, TaskResult
 from pulse.task_queue import TaskQueue
@@ -114,9 +120,9 @@ class Scheduler(LoggingMixing):
 
     def stopping_criteria_met(self) -> bool:
         return (
-                ENV == EnvEnum.TEST
-                and self._job_repo.count_pending_jobs() == 0
-                and self._task_queue.size() == 0
+            ENV == EnvEnum.TEST
+            and self._job_repo.count_pending_jobs() == 0
+            and self._task_queue.size() == 0
         )
 
     def wait_for_completion(self) -> list[TaskResult]:
