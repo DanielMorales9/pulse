@@ -128,7 +128,10 @@ class TaskInstanceRepository:
     def create_task_instance_from_job_run(job_run: JobRun) -> TaskInstance:
         obj = load_yaml(job_run.job.file_loc)
         return TaskInstance(
-            job_run_id=job_run.id, status=TaskInstanceStatus.RUNNING, **obj
+            job_run_id=job_run.id,
+            status=TaskInstanceStatus.RUNNING,
+            command=obj["command"],
+            runtime=obj["runtime"],
         )
 
     def create_task_instances_from_job_runs(
